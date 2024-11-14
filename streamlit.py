@@ -1,38 +1,33 @@
 import streamlit as st
-import easyocr
+import pytesseract
 import pandas as pd
 import numpy as np
-import cv2
 from PIL import Image
 import re
-import os
 import io
-import tempfile
 
 # Set page configuration
 st.set_page_config(
     page_title="Business Card Scanner",
     page_icon="📇",
-    layout="wide"
+    layout="centered"
 )
 
-# Initialize EasyOCR reader
-@st.cache_resource
-def load_ocr():
-    return easyocr.Reader(['en'])
+def extract_text_from_image(image):
+    """
+    Extract text from image using Tesseract OCR
+    """
+    try:
+        text = pytesseract.image_to_string(image)
+        return text.split('\n')
+    except Exception as e:
+        st.error(f"Error in OCR: {str(e)}")
+        return []
 
-def extract_info(text_list):
+def extract_info(text_lines):
     """
     Extract relevant information from OCR text
     """
-    # Initialize dictionary to store information
-    info = {
-        'name': '',
-        'phone': '',
-        'email': '',
-        'company': '',
-        'website': '',
-        'address': ''
-    }
-    
-    # Regular expressions for different fields
+    # Remove empty lines and strip whitespace
+    text_lines = [line.strip() for line in text_lines if line.strip()]
+
