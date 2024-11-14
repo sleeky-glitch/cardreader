@@ -1,10 +1,9 @@
 import streamlit as st
-import pytesseract
+import easyocr
 import pandas as pd
-import numpy as np
 from PIL import Image
-import re
 import io
+import re
 
 # Set page configuration
 st.set_page_config(
@@ -13,21 +12,24 @@ st.set_page_config(
     layout="centered"
 )
 
-def extract_text_from_image(image):
-    """
-    Extract text from image using Tesseract OCR
-    """
+# Initialize EasyOCR reader
+@st.cache_resource
+def load_ocr():
     try:
-        text = pytesseract.image_to_string(image)
-        return text.split('\n')
+        return easyocr.Reader(['en'])
+    except Exception as e:
+        st.error(f"Error loading OCR: {str(e)}")
+        return None
+
+def extract_text_from_image(image, reader):
+    """Extract text from image using EasyOCR."""
+    try:
+        results = reader.readtext(image)
+        return [text[1] for text in results]
     except Exception as e:
         st.error(f"Error in OCR: {str(e)}")
         return []
 
 def extract_info(text_lines):
-    """
-    Extract relevant information from OCR text
-    """
-    # Remove empty lines and strip whitespace
-    text_lines = [line.strip() for line in text_lines if line.strip()]
+
 
