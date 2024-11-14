@@ -1,6 +1,7 @@
 import streamlit as st
 import easyocr
 import pandas as pd
+import numpy as np
 from PIL import Image
 import io
 import re
@@ -24,12 +25,10 @@ def load_ocr():
 def extract_text_from_image(image, reader):
     """Extract text from image using EasyOCR."""
     try:
-        results = reader.readtext(image)
+        results = reader.readtext(np.array(image))
         return [text[1] for text in results]
     except Exception as e:
         st.error(f"Error in OCR: {str(e)}")
-        return []
 
-def extract_info(text_lines):
 
 
