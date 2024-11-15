@@ -1,13 +1,9 @@
-streamlit==1.29.0
-easyocr==1.7.1
-pandas==2.1.3
-Pillow==10.1.0
-openpyxl==3.1.2
-numpy==1.26.2
---find-links https://download.pytorch.org/whl/cpu
-torch>=2.2.0
-torchvision>=0.17.0
-opencv-python-headless==4.8.0.76
+streamlit
+easyocr
+pandas
+numpy
+Pillow
+openpyxl
 
 
 
