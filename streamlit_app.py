@@ -27,24 +27,22 @@ def load_ocr():
       st.error(f"Error loading OCR: {str(e)}")
       return None
 
-# Optimize image processing
+# Modified image processing function to handle PIL Image
 @st.cache_data(show_spinner=False)
-def process_image(image):
+def process_image(_image):
   """Preprocess image for better OCR results"""
-  img_array = np.array(image)
-  return img_array
+  return np.array(_image)
 
 @st.cache_data(show_spinner=False)
-def extract_text_from_image(image_array, reader):
+def extract_text_from_image(_image_array, _reader):
   """Extract text from image using EasyOCR with caching"""
   try:
-      results = reader.readtext(image_array)
+      results = _reader.readtext(_image_array)
       return [text[1] for text in results]
   except Exception as e:
       st.error(f"Error in OCR: {str(e)}")
       return []
 
-# Optimize information extraction with better patterns
 @st.cache_data(show_spinner=False)
 def extract_info(text_list):
   """Extract relevant information from the text with improved patterns"""
