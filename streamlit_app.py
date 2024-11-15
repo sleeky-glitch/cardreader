@@ -5,6 +5,7 @@ import numpy as np
 from PIL import Image
 import io
 import re
+from pathlib import Path
 
 # Set page configuration
 st.set_page_config(
@@ -13,26 +14,40 @@ st.set_page_config(
   layout="centered"
 )
 
-# Initialize EasyOCR reader
-@st.cache_resource
+# Create a downloads directory if it doesn't exist
+DOWNLOADS_DIR = Path("downloads")
+DOWNLOADS_DIR.mkdir(exist_ok=True)
+
+# Initialize EasyOCR reader with better caching
+@st.cache_resource(show_spinner=False)
 def load_ocr():
   try:
-      return easyocr.Reader(['en'])
+      return easyocr.Reader(['en'], gpu=False)  # Explicitly disable GPU for cloud deployment
   except Exception as e:
       st.error(f"Error loading OCR: {str(e)}")
       return None
 
-def extract_text_from_image(image, reader):
-  """Extract text from image using EasyOCR."""
+# Optimize image processing
+@st.cache_data(show_spinner=False)
+def process_image(image):
+  """Preprocess image for better OCR results"""
+  img_array = np.array(image)
+  return img_array
+
+@st.cache_data(show_spinner=False)
+def extract_text_from_image(image_array, reader):
+  """Extract text from image using EasyOCR with caching"""
   try:
-      results = reader.readtext(np.array(image))
+      results = reader.readtext(image_array)
       return [text[1] for text in results]
   except Exception as e:
       st.error(f"Error in OCR: {str(e)}")
       return []
 
+# Optimize information extraction with better patterns
+@st.cache_data(show_spinner=False)
 def extract_info(text_list):
-  """Extract relevant information from the text."""
+  """Extract relevant information from the text with improved patterns"""
   info = {
       'name': '',
       'phone': '',
@@ -42,110 +57,104 @@ def extract_info(text_list):
       'address': ''
   }
   
-  # Regular expressions for matching
-  email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
-  phone_pattern = r'[\+$]?[1-9][0-9 .\-\($]{8,}[0-9]'
-  website_pattern = r'www\.[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}|https?://[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+  patterns = {
+      'email': r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
+      'phone': r'[\+]?[\d]{0,3}[\s.-]?$?\d{3}$?[\s.-]?\d{3}[\s.-]?\d{4}',
+      'website': r'(?:www\.)?[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}'
+  }
   
-  address_indicators = ['street', 'avenue', 'road', 'lane', 'drive', 'boulevard', 'st', 'ave', 'rd', 'ln', 'dr', 'blvd']
+  address_indicators = {'street', 'avenue', 'road', 'lane', 'drive', 'boulevard', 
+                       'st', 'ave', 'rd', 'ln', 'dr', 'blvd'}
   
   for text in text_list:
       text = text.strip()
       
-      # Extract email
-      if re.search(email_pattern, text.lower()):
-          info['email'] = re.search(email_pattern, text.lower()).group()
-          continue
-          
-      # Extract phone
-      if re.search(phone_pattern, text):
-          info['phone'] = re.search(phone_pattern, text).group()
-          continue
-          
-      # Extract website
-      if re.search(website_pattern, text.lower()):
-          info['website'] = re.search(website_pattern, text.lower()).group()
-          continue
-          
-      # Look for address
+      # Extract using patterns
+      for key, pattern in patterns.items():
+          if not info[key] and re.search(pattern, text.lower()):
+              info[key] = re.search(pattern, text.lower()).group()
+              continue
+      
+      # Address detection
       if any(indicator in text.lower() for indicator in address_indicators):
           info['address'] = text
           continue
-          
-      # If text is short, it might be a name or company
-      if len(text.split()) <= 3 and not info['name']:
+      
+      # Name and company detection
+      words = text.split()
+      if len(words) <= 3 and not info['name']:
           info['name'] = text
       elif not info['company']:
           info['company'] = text
-          
+  
   return info
+
+def create_excel_file(info):
+  """Create Excel file from extracted information"""
+  df = pd.DataFrame([info])
+  output = io.BytesIO()
+  with pd.ExcelWriter(output, engine='openpyxl') as writer:
+      df.to_excel(writer, index=False)
+  return output.getvalue()
 
 def main():
   st.title("📇 Business Card Scanner")
   st.write("Upload a business card image to extract contact information")
   
-  # Load OCR reader
-  reader = load_ocr()
+  # Initialize OCR with progress indicator
+  with st.spinner('Initializing OCR engine...'):
+      reader = load_ocr()
+  
   if not reader:
-      st.error("Failed to initialize OCR. Please try again.")
+      st.error("Failed to initialize OCR. Please refresh the page.")
       return
   
-  # File uploader
-  uploaded_file = st.file_uploader("Choose a business card image", type=['png', 'jpg', 'jpeg'])
+  uploaded_file = st.file_uploader("Choose a business card image", 
+                                 type=['png', 'jpg', 'jpeg'],
+                                 help="Upload a clear image of a business card")
   
-  if uploaded_file is not None:
+  if uploaded_file:
       try:
-          # Display the uploaded image
+          # Process image
           image = Image.open(uploaded_file)
           st.image(image, caption='Uploaded Business Card', use_column_width=True)
           
           with st.spinner('Extracting information...'):
-              # Extract text from image
-              text_list = extract_text_from_image(image, reader)
+              # Process and extract text
+              image_array = process_image(image)
+              text_list = extract_text_from_image(image_array, reader)
               
               if text_list:
-                  # Extract structured information
                   info = extract_info(text_list)
                   
-                  # Display extracted information
+                  # Display results in a clean layout
                   st.subheader("📝 Extracted Information")
                   
                   col1, col2 = st.columns(2)
-                  
                   with col1:
-                      st.text_input("Name", info['name'])
-                      st.text_input("Phone", info['phone'])
-                      st.text_input("Email", info['email'])
-                      
-                  with col2:
-                      st.text_input("Company", info['company'])
-                      st.text_input("Website", info['website'])
-                      st.text_input("Address", info['address'])
+                      for field in ['name', 'phone', 'email']:
+                          st.text_input(field.capitalize(), info[field], key=field)
                   
-                  # Export to Excel option
-                  if st.button("Export to Excel"):
-                      df = pd.DataFrame([info])
-                      
-                      # Convert DataFrame to Excel
-                      output = io.BytesIO()
-                      with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                          df.to_excel(writer, index=False)
-                      
-                      # Prepare download button
-                      excel_data = output.getvalue()
+                  with col2:
+                      for field in ['company', 'website', 'address']:
+                          st.text_input(field.capitalize(), info[field], key=field)
+                  
+                  # Export functionality
+                  if st.button("Export to Excel", type="primary"):
+                      excel_data = create_excel_file(info)
                       st.download_button(
-                          label="Download Excel file",
+                          label="📥 Download Excel file",
                           data=excel_data,
                           file_name="business_card_info.xlsx",
                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                       )
               else:
-                  st.warning("No text was extracted from the image. Please try with a clearer image.")
+                  st.warning("No text detected. Please try with a clearer image.")
                   
       except Exception as e:
           st.error(f"Error processing image: {str(e)}")
-          
-  # Add footer
+  
+  # Footer
   st.markdown("---")
   st.markdown(
       """
@@ -158,6 +167,3 @@ def main():
 
 if __name__ == "__main__":
   main()
-
-
-
