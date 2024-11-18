@@ -1,10 +1,7 @@
 streamlit
-easyocr
 pandas
-phonenumbers
-numpy
-Pillow
-openpyxl
+pillow
+pytesseract
 
 
 
