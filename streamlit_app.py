@@ -2,10 +2,11 @@ import streamlit as st
 import easyocr
 import pandas as pd
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 import io
 import re
 from pathlib import Path
+import phonenumbers
 
 # Set page configuration
 st.set_page_config(
@@ -31,6 +32,10 @@ def load_ocr():
 @st.cache_data(show_spinner=False)
 def process_image(_image):
   """Preprocess image for better OCR results"""
+  # Convert to grayscale
+  _image = ImageOps.grayscale(_image)
+  # Resize image to a standard size
+  _image = _image.resize((800, 600))
   return np.array(_image)
 
 @st.cache_data(show_spinner=False)
@@ -57,12 +62,11 @@ def extract_info(text_list):
   
   patterns = {
       'email': r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
-      'phone': r'[\+]?[\d]{0,3}[\s.-]?$?\d{3}$?[\s.-]?\d{3}[\s.-]?\d{4}',
       'website': r'(?:www\.)?[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}'
   }
   
   address_indicators = {'street', 'avenue', 'road', 'lane', 'drive', 'boulevard', 
-                       'st', 'ave', 'rd', 'ln', 'dr', 'blvd'}
+                        'st', 'ave', 'rd', 'ln', 'dr', 'blvd'}
   
   for text in text_list:
       text = text.strip()
@@ -72,6 +76,12 @@ def extract_info(text_list):
           if not info[key] and re.search(pattern, text.lower()):
               info[key] = re.search(pattern, text.lower()).group()
               continue
+      
+      # Phone number extraction using phonenumbers library
+      if not info['phone']:
+          for match in phonenumbers.PhoneNumberMatcher(text, "US"):
+              info['phone'] = phonenumbers.format_number(match.number, phonenumbers.PhoneNumberFormat.INTERNATIONAL)
+              break
       
       # Address detection
       if any(indicator in text.lower() for indicator in address_indicators):
@@ -108,8 +118,8 @@ def main():
       return
   
   uploaded_file = st.file_uploader("Choose a business card image", 
-                                 type=['png', 'jpg', 'jpeg'],
-                                 help="Upload a clear image of a business card")
+                                   type=['png', 'jpg', 'jpeg'],
+                                   help="Upload a clear image of a business card")
   
   if uploaded_file:
       try:
