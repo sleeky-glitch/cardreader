@@ -65,8 +65,13 @@ def extract_info(text_list):
       'website': r'(?:www\.)?[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}'
   }
   
-  address_indicators = {'street', 'avenue', 'road', 'lane', 'drive', 'boulevard', 
-                        'st', 'ave', 'rd', 'ln', 'dr', 'blvd'}
+  # Common address indicators for India and Middle East
+  address_indicators = {'road', 'street', 'lane', 'block', 'sector', 'avenue', 'boulevard', 
+                        'circle', 'district', 'area', 'colony', 'nagar', 'vihar', 'bagh', 
+                        'marg', 'chowk', 'bazaar', 'market', 'complex', 'building', 'tower'}
+  
+  # Common name indicators (can be expanded)
+  name_indicators = {'mr', 'mrs', 'ms', 'dr', 'prof'}
   
   for text in text_list:
       text = text.strip()
@@ -79,20 +84,20 @@ def extract_info(text_list):
       
       # Phone number extraction using phonenumbers library
       if not info['phone']:
-          for match in phonenumbers.PhoneNumberMatcher(text, "US"):
+          for match in phonenumbers.PhoneNumberMatcher(text, "IN"):  # Assuming Indian numbers
               info['phone'] = phonenumbers.format_number(match.number, phonenumbers.PhoneNumberFormat.INTERNATIONAL)
               break
       
       # Address detection
-      if any(indicator in text.lower() for indicator in address_indicators):
+      if not info['address'] and any(indicator in text.lower() for indicator in address_indicators):
           info['address'] = text
           continue
       
       # Name and company detection
       words = text.split()
-      if len(words) <= 3 and not info['name']:
+      if len(words) <= 3 and not info['name'] and any(word.lower() in name_indicators for word in words):
           info['name'] = text
-      elif not info['company']:
+      elif not info['company'] and len(words) > 1:
           info['company'] = text
   
   return info
