@@ -1,6 +1,7 @@
 streamlit
 easyocr
 pandas
+phonenumbers
 numpy
 Pillow
 openpyxl
